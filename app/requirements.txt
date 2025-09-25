@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+xgboost
+pandas
+python-dotenv
+joblib
+requests

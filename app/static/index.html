@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Purplle Inventory Forecast</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f3f4f6;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin: 15px 0 5px;
+        }
+        input[type="text"],
+        input[type="date"] {
+            padding: 8px;
+            width: 250px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 25px;
+            background-color: #3498db;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 25px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        #error {
+            margin-top: 15px;
+            color: red;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Purplle Inventory Forecast</h1>
+    <label for="ean_code">EAN Code</label>
+    <input type="text" id="ean_code" placeholder="Enter ean code" />
+
+    <label for="order_date">Order Date</label>
+    <input type="date" id="order_date" />
+
+    <label for="api_key">API Key</label>
+    <input type="text" id="api_key" placeholder="Enter your API key" />
+
+    <button id="predict_btn">Predict Quantity</button>
+
+    <div id="result"></div>
+    <div id="error"></div>
+
+    <script>
+        document.getElementById("predict_btn").addEventListener("click", async () => {
+            const eanCode = document.getElementById("ean_code").value.trim();
+            const orderDate = document.getElementById("order_date").value;
+            const apiKey = document.getElementById("api_key").value.trim();
+            const resultEl = document.getElementById("result");
+            const errorEl = document.getElementById("error");
+
+            resultEl.textContent = "";
+            errorEl.textContent = "";
+
+            if (!eanCode) {
+                errorEl.textContent = "Please enter an EAN code.";
+                return;
+            }
+            if (!orderDate) {
+                errorEl.textContent = "Please select an order date.";
+                return;
+            }
+            if (!apiKey) {
+                errorEl.textContent = "Please enter your API key.";
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `http://localhost:8000/predict?ean_code=${encodeURIComponent(eanCode)}&order_date=${encodeURIComponent(orderDate)}`,
+                    {
+                        method: "POST",
+                        headers: {
+                            "X-API-Key": apiKey
+                        },
+                    }
+                );
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    errorEl.textContent = `Error: ${errorData.detail || response.statusText}`;
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.predicted_quantity !== undefined) {
+                    resultEl.textContent = `Predicted Quantity: ${data.predicted_quantity}`;
+                } else {
+                    errorEl.textContent = "No prediction result returned.";
+                }
+            } catch (error) {
+                errorEl.textContent = `Request failed: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
