@@ -59,9 +59,6 @@
     <label for="order_date">Order Date</label>
     <input type="date" id="order_date" />
 
-    <label for="api_key">API Key</label>
-    <input type="text" id="api_key" placeholder="Enter your API key" />
-
     <button id="predict_btn">Predict Quantity</button>
 
     <div id="result"></div>
@@ -71,7 +68,6 @@
         document.getElementById("predict_btn").addEventListener("click", async () => {
             const eanCode = document.getElementById("ean_code").value.trim();
             const orderDate = document.getElementById("order_date").value;
-            const apiKey = document.getElementById("api_key").value.trim();
             const resultEl = document.getElementById("result");
             const errorEl = document.getElementById("error");
 
@@ -86,19 +82,20 @@
                 errorEl.textContent = "Please select an order date.";
                 return;
             }
-            if (!apiKey) {
-                errorEl.textContent = "Please enter your API key.";
-                return;
-            }
 
             try {
                 const response = await fetch(
-                    `http://localhost:8000/predict?ean_code=${encodeURIComponent(eanCode)}&order_date=${encodeURIComponent(orderDate)}`,
+                    `https://purplle-inventory-forecast-1070349950078.us-central1.run.app/predict`,
                     {
                         method: "POST",
                         headers: {
-                            "X-API-Key": apiKey
+                            "Content-Type": "application/json",
+                            // "X-API-Key": "j3nK8fS1nN6G9RC8lp9KWqv-VpJyqxS3B9ejJ_E5iaqU"
                         },
+                        body: JSON.stringify({
+                            ean_code: eanCode,
+                            order_date: orderDate
+                        })
                     }
                 );
                 
