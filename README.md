@@ -32,7 +32,7 @@ This repository implements an **end-to-end inventory forecasting system** for Pu
 - Model experimentation and selection (comparing regressors).  
 - Final model training, forecasting next 2 years, and iterative retraining using forecasted data.  
 - Exposing predictions through a FastAPI REST service locally.
-- Containerizing the application with Docker and deploying to **GCP Cloud Run**.  
+- Containerizing the application with Docker and deploying to **GCP Cloud Run** (FastAPI).  
 - Providing a lightweight serverless endpoint via **GCP Cloud Function** (Flask).
 
 The work represents careful analysis, iterative testing, and production-minded deployment — reflecting sustained effort, attention to reproducibility, and practical MLOps skills.
