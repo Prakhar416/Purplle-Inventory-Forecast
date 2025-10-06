@@ -7,8 +7,8 @@
 
 ## Table of Contents
 
-1. [Overview](#overview)  
-2. [Project Structure](#project-structure)  
+1. [Overview](#1-overview)  
+2. [Project Structure](#2-project-structure)  
 3. [Exploratory Data Analysis (EDA)](#exploratory-data-analysis-eda)  
 4. [Model Development and Validation](#model-development-and-validation)  
 5. [Model Training and Prediction](#model-training-and-prediction)  
