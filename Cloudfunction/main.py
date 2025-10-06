@@ -6,7 +6,6 @@ import json
 from google.cloud import storage
 import tempfile
 import os
-from flask import jsonify
 from datetime import datetime
 
 model = None
@@ -38,6 +37,12 @@ def load_resources():
         agg_df = pd.read_csv(data_path, parse_dates=['order_date'])
         agg_df = agg_df.sort_values(['ean_code', 'order_date']).reset_index(drop=True)
         os.unlink(data_path)
+
+FEATURE_COLUMNS = [
+    'lag_1', 'lag_2', 'lag_7', 'roll_mean_3', 'roll_mean_7', 'roll_mean_14',
+    'dayofweek', 'dayofmonth', 'weekofyear', 'month', 'quarter',
+    'is_month_start', 'is_month_end', 'is_weekend', 'ean_code_encoded'
+]
 
 def prepare_features(agg_df, ean_code, order_date, le):
     order_date = pd.to_datetime(order_date)
@@ -93,21 +98,37 @@ def predict(request):
         load_resources()
         request_json = request.get_json()
         if not request_json:
-            return jsonify({"error": "Missing JSON body"}), 400
+            print("Missing JSON body")
+            body = json.dumps({"error": "Missing JSON body"})
+            return (body, 400, {"Content-Type": "application/json"})
+
         ean_code = request_json.get('ean_code')
         order_date = request_json.get('order_date')
 
         if not ean_code or not order_date:
-            return jsonify({"error": "Missing 'ean_code' or 'order_date'"}), 400
+            print(f"Missing parameters - ean_code: {ean_code}, order_date: {order_date}")
+            body = json.dumps({"error": "Missing 'ean_code' or 'order_date'"})
+            return (body, 400, {"Content-Type": "application/json"})
+
+        print(f"Received request: ean_code={ean_code}, order_date={order_date}")
 
         features = prepare_features(agg_df, ean_code, order_date, le)
+        print(f"Prepared features: {features}")
+
         input_df = pd.DataFrame([features])
         prediction = model.predict(input_df)[0]
         predicted_quantity = max(0, int(round(prediction)))
 
-        return jsonify({"predicted_quantity": predicted_quantity})
+        print(f"Model prediction: {prediction}, Rounded prediction: {predicted_quantity}")
+
+        body = json.dumps({"predicted_quantity": predicted_quantity})
+        return (body, 200, {"Content-Type": "application/json"})
 
     except ValueError as ve:
-        return jsonify({"error": str(ve)}), 400
+        print(f"ValueError: {str(ve)}")
+        body = json.dumps({"error": str(ve)})
+        return (body, 400, {"Content-Type": "application/json"})
     except Exception as e:
-        return jsonify({"error": "Internal prediction error", "details": str(e)}), 500
+        print(f"Exception: {str(e)}")
+        body = json.dumps({"error": "Internal prediction error", "details": str(e)})
+        return (body, 500, {"Content-Type": "application/json"})
