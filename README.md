@@ -31,7 +31,7 @@ This repository implements an **end-to-end inventory forecasting system** for Pu
 - Final model training, forecasting next 2 years, and iterative retraining using forecasted data.  
 - Exposing predictions through a FastAPI REST service locally.
 - Containerizing the application with Docker and deploying to **GCP Cloud Run** (FastAPI).  
-- Providing a lightweight serverless endpoint via **GCP Cloud Function** (Flask).
+- Providing a lightweight serverless endpoint via **GCP Cloud Function**.
 
 
 
@@ -413,6 +413,6 @@ Productionization required repeated testing, careful engineering, and prioritiza
 - `XGBoost Model Training and Prediction.ipynb`: final model training/forecasting
 - `app/main.py`: FastAPI REST API logic
 - `app/utils.py`: feature engineering and preprocessing utilities
-- `Dockerfile`: Docker container instructions
+- `app/Dockerfile`: Docker container instructions
 - `Cloudfunction/main.py`: Flask Cloud Function (GCP)
-- `models/`: trained model artifacts
+- `app/models/`: trained model artifacts
