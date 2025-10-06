@@ -66,6 +66,8 @@ Purplle-Inventory-Forecast-main/
 **Purpose:**  
 Understand seasonality, trends, missingness, outliers, and feature relationships so feature engineering and model decisions are informed.
 
+[EDA File](purplle.ipynb)
+
 **Typical steps performed:**
 - Cleaning and preprocessing the raw sales data.
 - Parse and normalize dates; create time features (month, quarter, year, day-of-week,...).
@@ -77,6 +79,9 @@ Understand seasonality, trends, missingness, outliers, and feature relationships
 ---
 
 ## 4. Model Development and Validation
+
+[Model Development](purplle_predictice.ipynb)
+[Model Selection and Validation](Model-Selection-and-Validation.ipynb)
 
 **Models evaluated:**
 - Linear Regression
@@ -105,6 +110,8 @@ print(f"MAE: {mae:.3f}, RMSE: {rmse:.3f}, R2: {r2:.3f}")
 
 ## 5. Model Training and Prediction
 
+[Model Training and Prediction](XGBoost-Model-Training-and-Prediction.ipynb)
+
 **Workflow:**
 - Train final model on the full historical dataset (after validation).
 - Generate forecasts for the next 2 years using appropriate feature engineering for future dates.
@@ -123,16 +130,18 @@ model.save_model("models/purplle_xgb_5yrs.json")
 ```python
 construct future features for next 24 months
 future_dates = pd.date_range(start=df['Date'].max()+pd.Timedelta(days=1), periods=24, freq='MS')
-future_features = make_time_features(future_dates) # user-defined helper
+future_features = create_daily_features(future_dates) # user-defined helper
 preds = model.predict(future_features)
 pd.DataFrame({'Date': future_dates, 'Forecast': preds}).to_csv('2year_forecast.csv', index=False)
 ```
 
-*Notes:* `make_time_features` should mirror feature engineering used during training (lags, rolling means, categorical encodings, etc.).
+*Notes:* `create_daiy_features` should mirror feature engineering used during training (lags, rolling means, categorical encodings, etc.).
 
 ---
 
 ## 6. Local Deployment — FastAPI
+
+[Main.py](app/main.py)
 
 **Goal:** expose model predictions as a REST endpoint for integration and testing.
 
@@ -147,7 +156,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from pathlib import Path
-
 
 app = FastAPI(title="XGBoost Sales Forecast API", version="1.0.0")
 
@@ -180,60 +188,6 @@ agg_df = pd.read_csv("data.csv", parse_dates=['order_date'])
 agg_df = agg_df.sort_values(['ean_code', 'order_date']).reset_index(drop=True)
 le = joblib.load("label_encoder.joblib")
 
-FEATURE_COLUMNS = [
-    'lag_1', 'lag_2', 'lag_7', 'roll_mean_3', 'roll_mean_7', 'roll_mean_14',
-    'dayofweek', 'dayofmonth', 'weekofyear', 'month', 'quarter',
-    'is_month_start', 'is_month_end', 'is_weekend', 'ean_code_encoded'
-]
-
-def prepare_features(agg_df, ean_code, order_date, le):
-    order_date = pd.to_datetime(order_date)
-    df = agg_df[agg_df['ean_code'] == ean_code].copy()
-    if df.empty:
-        raise ValueError("EAN code not found in data")
-    df = df.sort_values('order_date').set_index('order_date')
-
-    if order_date <= df.index.max():
-        raise ValueError("Order date must be after last historical date.")
-
-    lag_1 = df['quantity'].get(order_date - pd.Timedelta(days=1), 0)
-    lag_2 = df['quantity'].get(order_date - pd.Timedelta(days=2), 0)
-    lag_7 = df['quantity'].get(order_date - pd.Timedelta(days=7), 0)
-
-    roll_mean_3 = df['quantity'].loc[(order_date - pd.Timedelta(days=3)):(order_date - pd.Timedelta(days=1))].mean()
-    roll_mean_7 = df['quantity'].loc[(order_date - pd.Timedelta(days=7)):(order_date - pd.Timedelta(days=1))].mean()
-    roll_mean_14 = df['quantity'].loc[(order_date - pd.Timedelta(days=14)):(order_date - pd.Timedelta(days=1))].mean()
-
-    dayofweek = order_date.dayofweek
-    dayofmonth = order_date.day
-    weekofyear = order_date.isocalendar().week
-    month = order_date.month
-    quarter = order_date.quarter
-    is_month_start = int(order_date.is_month_start)
-    is_month_end = int(order_date.is_month_end)
-    is_weekend = int(dayofweek >= 5)
-
-    ean_code_encoded = le.transform([ean_code])[0]
-
-    features = {
-        'lag_1': lag_1 if pd.notna(lag_1) else 0,
-        'lag_2': lag_2 if pd.notna(lag_2) else 0,
-        'lag_7': lag_7 if pd.notna(lag_7) else 0,
-        'roll_mean_3': roll_mean_3 if pd.notna(roll_mean_3) else 0,
-        'roll_mean_7': roll_mean_7 if pd.notna(roll_mean_7) else 0,
-        'roll_mean_14': roll_mean_14 if pd.notna(roll_mean_14) else 0,
-        'dayofweek': dayofweek,
-        'dayofmonth': dayofmonth,
-        'weekofyear': weekofyear,
-        'month': month,
-        'quarter': quarter,
-        'is_month_start': is_month_start,
-        'is_month_end': is_month_end,
-        'is_weekend': is_weekend,
-        'ean_code_encoded': ean_code_encoded
-    }
-    return features
-
 @app.post("/predict", response_model=PredictResponse, status_code=status.HTTP_200_OK)
 async def predict(
     request: PredictRequest,
@@ -260,7 +214,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 **Sample cURL:**
 ```bash
 curl -X POST "http://localhost:8000/predict/" -H "Content-Type: application/json"
--d '{"date":"2026-01-01","sku":"SKU123","store_id":10}'
+-d '{"order_date":"2026-01-01","ean_code":"8904362500005"}'
 ```
 
 ---
@@ -306,7 +260,9 @@ docker run -p 8000:8000 purplle-inventory:latest
 gcloud builds submit --tag gcr.io/{PROJECT_ID}/purplle-inventory
 gcloud run deploy purplle-inventory
 --image gcr.io/{PROJECT_ID}/purplle-inventory
---platform managed --region asia-south1 --allow-unauthenticated
+--platform managed
+--region asia-south1
+--allow-unauthenticated
 ```
 
 > *Tune memory/CPU settings and consider model-hosting strategy for large artifacts.*
@@ -337,11 +293,14 @@ return jsonify({'forecast': float(pred)})
 
 **Deploy:**
 ```bash
-gcloud functions deploy purplle-function
---runtime python310
---trigger-http
---allow-unauthenticated
---entry-point app
+gcloud functions deploy purplle-forecast `
+--runtime=python311 `
+--trigger-http `
+--entry-point=predict `
+--set-env-vars MODEL_BUCKET=purplle-forecast `
+--allow-unauthenticated `
+--source . `
+--memory=1GB
 ```
 
 > *Cloud Functions are best for low throughput and quick demos due to resource limits and cold starts.*
