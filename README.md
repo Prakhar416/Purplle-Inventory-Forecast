@@ -1,9 +1,7 @@
 # Purplle Inventory Forecasting — End-to-End Machine Learning & Deployment Project
 
-**Author:** Prakhar Sethiya  
-**Date:** October 6, 2025
 
----
+
 
 ## Table of Contents
 
@@ -35,9 +33,8 @@ This repository implements an **end-to-end inventory forecasting system** for Pu
 - Containerizing the application with Docker and deploying to **GCP Cloud Run** (FastAPI).  
 - Providing a lightweight serverless endpoint via **GCP Cloud Function** (Flask).
 
-The work represents careful analysis, iterative testing, and production-minded deployment — reflecting sustained effort, attention to reproducibility, and practical MLOps skills.
 
----
+
 
 ## 2. Project Structure
 ```
@@ -59,7 +56,7 @@ Purplle-Inventory-Forecast-main/
 └── requirements.txt
 ```
 
----
+
 
 ## 3. Exploratory Data Analysis (EDA)
 
@@ -76,7 +73,7 @@ Understand seasonality, trends, missingness, outliers, and feature relationships
 - Visualizing **regional** and **category-wise** sales performance.
 - Visualize correlations and feature importances to guide feature selection.
 
----
+
 
 ## 4. Model Development and Validation
 
@@ -106,7 +103,7 @@ print(f"MAE: {mae:.3f}, RMSE: {rmse:.3f}, R2: {r2:.3f}")
 
 *Rationale for XGBoost*: handled non-linearities and interactions well, robust to heterogeneous features, trained quickly to high performance and generalization.
 
----
+
 
 ## 5. Model Training and Prediction
 
@@ -135,9 +132,9 @@ preds = model.predict(future_features)
 pd.DataFrame({'Date': future_dates, 'Forecast': preds}).to_csv('2year_forecast.csv', index=False)
 ```
 
-*Notes:* `create_daiy_features` should mirror feature engineering used during training (lags, rolling means, categorical encodings, etc.).
+*Notes:* `create_daily_features` should mirror feature engineering used during training (lags, rolling means, categorical encodings, etc.).
 
----
+
 
 ## 6. Local Deployment — FastAPI
 
@@ -247,7 +244,7 @@ docker run -p 8000:8000 purplle-inventory:latest
 
 > *Ensure model files are available in the image or as a mounted volume.*
 
----
+
 
 ## 8. Deployment — GCP Cloud Run
 
@@ -267,7 +264,7 @@ gcloud run deploy purplle-inventory
 
 > *Tune memory/CPU settings and consider model-hosting strategy for large artifacts.*
 
----
+
 
 ## 9. Deployment — GCP Cloud Function (Flask)
 
@@ -305,7 +302,7 @@ gcloud functions deploy purplle-forecast `
 
 > *Cloud Functions are best for low throughput and quick demos due to resource limits and cold starts.*
 
----
+
 
 ## 10. Commands Reference
 
@@ -332,7 +329,7 @@ gcloud functions deploy purplle-function --runtime python310 --trigger-http --al
 ```
 > *Replace `{PROJECT_ID}` with your actual GCP project id.*
 
----
+
 
 ## 11. Key Code Snippets & Explanations
 
@@ -388,7 +385,7 @@ RUN pip install -r requirements.txt
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
----
+
 
 ## 12. Results and Learnings
 
@@ -398,7 +395,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 - Cloud Run is ideal for scale and reliability; Cloud Function is great for demos or low volume.
 - Addressed feature drift and reproducible preprocessing.
 
----
+
 
 ## 13. Summary & Reflection
 
@@ -406,7 +403,7 @@ This project demonstrates the transformation of raw data into a reliable forecas
 
 Productionization required repeated testing, careful engineering, and prioritization of reproducibility and scale.
 
----
+
 
 ## 14. Appendix — Key Files
 
