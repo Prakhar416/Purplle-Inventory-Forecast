@@ -410,7 +410,8 @@ Productionization required repeated testing, careful engineering, and prioritiza
 
 ## 14. Appendix — Key Files
 
-- `5years_data_visualization.ipynb`: EDA and visualizations
+- `purplle.ipynb`: Exploratory Data Analysis
+- `5years_data_visualization.ipynb`: Visualizations
 - `Model Selection and Validation.ipynb`: model comparisons & validation
 - `XGBoost Model Training and Prediction.ipynb`: final model training/forecasting
 - `app/main.py`: FastAPI REST API logic
