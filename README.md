@@ -9,18 +9,18 @@
 
 1. [Overview](#1-overview)  
 2. [Project Structure](#2-project-structure)  
-3. [Exploratory Data Analysis (EDA)](#exploratory-data-analysis-eda)  
-4. [Model Development and Validation](#model-development-and-validation)  
-5. [Model Training and Prediction](#model-training-and-prediction)  
-6. [Local Deployment — FastAPI](#local-deployment--fastapi)  
-7. [Containerization — Docker](#containerization--docker)  
-8. [Deployment — GCP Cloud Run](#deployment--gcp-cloud-run)  
-9. [Deployment — GCP Cloud Function (Flask)](#deployment--gcp-cloud-function-flask)  
-10. [Commands Reference](#commands-reference)  
-11. [Key Code Snippets & Explanations](#key-code-snippets--explanations)  
-12. [Results and Learnings](#results-and-learnings)  
-13. [Summary & Reflection](#summary--reflection)  
-14. [Appendix — Key Files](#appendix--key-files)
+3. [Exploratory Data Analysis (EDA)](#3-exploratory-data-analysis-eda)  
+4. [Model Development and Validation](#4-model-development-and-validation)  
+5. [Model Training and Prediction](#5-model-training-and-prediction)  
+6. [Local Deployment — FastAPI](#6-local-deployment--fastapi)  
+7. [Containerization — Docker](#7-containerization--docker)  
+8. [Deployment — GCP Cloud Run](#8-deployment--gcp-cloud-run)  
+9. [Deployment — GCP Cloud Function (Flask)](#9-deployment--gcp-cloud-function-flask)  
+10. [Commands Reference](#10-commands-reference)  
+11. [Key Code Snippets & Explanations](#11-key-code-snippets--explanations)  
+12. [Results and Learnings](#12-results-and-learnings)  
+13. [Summary & Reflection](#13-summary--reflection)  
+14. [Appendix — Key Files](#14-appendix--key-files)
 
 ---
 
@@ -67,24 +67,12 @@ Purplle-Inventory-Forecast-main/
 Understand seasonality, trends, missingness, outliers, and feature relationships so feature engineering and model decisions are informed.
 
 **Typical steps performed:**
-- Parse and normalize dates; create time features (month, quarter, year, day-of-week).
-- Aggregate sales by SKU/category/region and visualize seasonal patterns.
-- Fill or impute missing values intelligently; treat or cap outliers.
+- Cleaning and preprocessing the raw sales data.
+- Parse and normalize dates; create time features (month, quarter, year, day-of-week,...).
+- Identifying **monthly and yearly sales trends**.  
+- Fill or impute missing values intelligently; treat or cap outliers. 
+- Visualizing **regional** and **category-wise** sales performance.
 - Visualize correlations and feature importances to guide feature selection.
-
-**Representative snippet:**
-parse dates and add time features
-```python
-df['Date'] = pd.to_datetime(df['Date'])
-df['Year'] = df['Date'].dt.year
-df['Month'] = df['Date'].dt.month
-df['DayOfWeek'] = df['Date'].dt.dayofweek
-
-quick seasonal plot
-sns.lineplot(x='Date', y='Sales', data=df.groupby('Date')['Sales'].sum().reset_index())
-plt.title('Daily Sales (5 years)')
-plt.show()
-```
 
 ---
 
@@ -96,7 +84,7 @@ plt.show()
 - XGBoost Regressor (final selection)
 
 **Validation approach:**
-- Temporal train/validation split (respecting time order) and K-fold cross-validation where applicable.
+- Temporal train/validation split (respecting time order).
 - Metrics: Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), R².
 - Hyperparameter tuning via grid search or lightweight CV for RandomForest / XGBoost.
 
@@ -150,34 +138,124 @@ pd.DataFrame({'Date': future_dates, 'Forecast': preds}).to_csv('2year_forecast.c
 
 **Key app/main.py snippet:**
 ```python
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Depends, status
 from pydantic import BaseModel
-import joblib
 import pandas as pd
+import joblib
+import xgboost as xgb
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from pathlib import Path
+
+
+app = FastAPI(title="XGBoost Sales Forecast API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    index_path = Path("static/index.html")
+    return index_path.read_text()
 
 class PredictRequest(BaseModel):
-date: str
-sku: str
-store_id: int
-# add other features required
+    ean_code: str
+    order_date: str
 
-app = FastAPI()
-model = joblib.load("models/purplle_xgb_5yrs.joblib")
+class PredictResponse(BaseModel):
+    predicted_quantity: int
 
-@app.post("/predict/")
-def predict(req: PredictRequest):
-row = pd.DataFrame([req.dict()])
-# preprocess row (same pipeline used at training time)
-X = preprocess_input(row)
-pred = model.predict(X)
-return {"forecast": float(pred)}
+model = xgb.XGBRegressor()
+
+model.load_model("model.json")
+agg_df = pd.read_csv("data.csv", parse_dates=['order_date'])
+agg_df = agg_df.sort_values(['ean_code', 'order_date']).reset_index(drop=True)
+le = joblib.load("label_encoder.joblib")
+
+FEATURE_COLUMNS = [
+    'lag_1', 'lag_2', 'lag_7', 'roll_mean_3', 'roll_mean_7', 'roll_mean_14',
+    'dayofweek', 'dayofmonth', 'weekofyear', 'month', 'quarter',
+    'is_month_start', 'is_month_end', 'is_weekend', 'ean_code_encoded'
+]
+
+def prepare_features(agg_df, ean_code, order_date, le):
+    order_date = pd.to_datetime(order_date)
+    df = agg_df[agg_df['ean_code'] == ean_code].copy()
+    if df.empty:
+        raise ValueError("EAN code not found in data")
+    df = df.sort_values('order_date').set_index('order_date')
+
+    if order_date <= df.index.max():
+        raise ValueError("Order date must be after last historical date.")
+
+    lag_1 = df['quantity'].get(order_date - pd.Timedelta(days=1), 0)
+    lag_2 = df['quantity'].get(order_date - pd.Timedelta(days=2), 0)
+    lag_7 = df['quantity'].get(order_date - pd.Timedelta(days=7), 0)
+
+    roll_mean_3 = df['quantity'].loc[(order_date - pd.Timedelta(days=3)):(order_date - pd.Timedelta(days=1))].mean()
+    roll_mean_7 = df['quantity'].loc[(order_date - pd.Timedelta(days=7)):(order_date - pd.Timedelta(days=1))].mean()
+    roll_mean_14 = df['quantity'].loc[(order_date - pd.Timedelta(days=14)):(order_date - pd.Timedelta(days=1))].mean()
+
+    dayofweek = order_date.dayofweek
+    dayofmonth = order_date.day
+    weekofyear = order_date.isocalendar().week
+    month = order_date.month
+    quarter = order_date.quarter
+    is_month_start = int(order_date.is_month_start)
+    is_month_end = int(order_date.is_month_end)
+    is_weekend = int(dayofweek >= 5)
+
+    ean_code_encoded = le.transform([ean_code])[0]
+
+    features = {
+        'lag_1': lag_1 if pd.notna(lag_1) else 0,
+        'lag_2': lag_2 if pd.notna(lag_2) else 0,
+        'lag_7': lag_7 if pd.notna(lag_7) else 0,
+        'roll_mean_3': roll_mean_3 if pd.notna(roll_mean_3) else 0,
+        'roll_mean_7': roll_mean_7 if pd.notna(roll_mean_7) else 0,
+        'roll_mean_14': roll_mean_14 if pd.notna(roll_mean_14) else 0,
+        'dayofweek': dayofweek,
+        'dayofmonth': dayofmonth,
+        'weekofyear': weekofyear,
+        'month': month,
+        'quarter': quarter,
+        'is_month_start': is_month_start,
+        'is_month_end': is_month_end,
+        'is_weekend': is_weekend,
+        'ean_code_encoded': ean_code_encoded
+    }
+    return features
+
+@app.post("/predict", response_model=PredictResponse, status_code=status.HTTP_200_OK)
+async def predict(
+    request: PredictRequest,
+    # api_key: str = Depends(get_api_key)
+):
+    try:
+        features = prepare_features(agg_df, request.ean_code, request.order_date, le)
+        input_df = pd.DataFrame([features], columns=FEATURE_COLUMNS)
+        prediction = model.predict(input_df)[0]
+        predicted_quantity = max(0, int(round(prediction)))
+        return PredictResponse(predicted_quantity=predicted_quantity)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal prediction error")
+
 ```
 
 **Run locally:**
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-text
 
 **Sample cURL:**
 ```bash
@@ -191,6 +269,8 @@ curl -X POST "http://localhost:8000/predict/" -H "Content-Type: application/json
 
 **Guarantee consistent environment across deployments.**
 
+[Dockerfile](app/Dockerfile)
+
 **Sample Dockerfile:**
 ```dockerfile
 FROM python:3.10-slim
@@ -202,7 +282,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-```bash
+```
 
 
 **Build & run:**
