@@ -6,7 +6,6 @@ import json
 from google.cloud import storage
 import tempfile
 import os
-from datetime import datetime
 
 model = None
 le = None
