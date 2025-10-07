@@ -13,7 +13,7 @@
 6. [Local Deployment — FastAPI](#6-local-deployment--fastapi)  
 7. [Containerization — Docker](#7-containerization--docker)  
 8. [Deployment — GCP Cloud Run](#8-deployment--gcp-cloud-run)  
-9. [Deployment — GCP Cloud Function (Flask)](#9-deployment--gcp-cloud-function-flask)  
+9. [Deployment — GCP Cloud Function](#9-deployment--gcp-cloud-function)  
 10. [Commands Reference](#10-commands-reference)  
 11. [Key Code Snippets & Explanations](#11-key-code-snippets--explanations)  
 12. [Results and Learnings](#12-results-and-learnings)  
@@ -32,7 +32,6 @@ This repository implements an **end-to-end inventory forecasting system** for Pu
 - Exposing predictions through a FastAPI REST service locally.
 - Containerizing the application with Docker and deploying to **GCP Cloud Run** (FastAPI).  
 - Providing a lightweight serverless endpoint via **GCP Cloud Function**.
-
 
 
 
@@ -266,26 +265,67 @@ gcloud run deploy purplle-inventory
 
 
 
-## 9. Deployment — GCP Cloud Function (Flask)
+## 9. Deployment — GCP Cloud Function
 
 **For lightweight, event-driven serving.**
 
 **Example (`Cloudfunction/main.py`):**
 ```python
-from flask import Flask, request, jsonify
-import joblib
+import functions_framework
 import pandas as pd
+import joblib
+import xgboost as xgb
+import json
+from google.cloud import storage
+import tempfile
+import os
 
-app = Flask(name)
-model = joblib.load('model.json')
+model = None
+le = None
+agg_df = None
+storage_client = storage.Client()
+BUCKET_NAME = os.environ.get('MODEL_BUCKET')
 
-@app.route('/predict', methods=['POST'])
-def predict():
-data = request.get_json()
-df = pd.DataFrame([data])
-X = preprocess_input(df)
-pred = model.predict(X)
-return jsonify({'forecast': float(pred)})
+@functions_framework.http
+def predict(request):
+    try:
+        load_resources()
+        request_json = request.get_json()
+        if not request_json:
+            print("Missing JSON body")
+            body = json.dumps({"error": "Missing JSON body"})
+            return (body, 400, {"Content-Type": "application/json"})
+
+        ean_code = request_json.get('ean_code')
+        order_date = request_json.get('order_date')
+
+        if not ean_code or not order_date:
+            print(f"Missing parameters - ean_code: {ean_code}, order_date: {order_date}")
+            body = json.dumps({"error": "Missing 'ean_code' or 'order_date'"})
+            return (body, 400, {"Content-Type": "application/json"})
+
+        print(f"Received request: ean_code={ean_code}, order_date={order_date}")
+
+        features = prepare_features(agg_df, ean_code, order_date, le)
+        print(f"Prepared features: {features}")
+
+        input_df = pd.DataFrame([features])
+        prediction = model.predict(input_df)[0]
+        predicted_quantity = max(0, int(round(prediction)))
+
+        print(f"Model prediction: {prediction}, Rounded prediction: {predicted_quantity}")
+
+        body = json.dumps({"predicted_quantity": predicted_quantity})
+        return (body, 200, {"Content-Type": "application/json"})
+
+    except ValueError as ve:
+        print(f"ValueError: {str(ve)}")
+        body = json.dumps({"error": str(ve)})
+        return (body, 400, {"Content-Type": "application/json"})
+    except Exception as e:
+        print(f"Exception: {str(e)}")
+        body = json.dumps({"error": "Internal prediction error", "details": str(e)})
+        return (body, 500, {"Content-Type": "application/json"})
 ```
 
 **Deploy:**
